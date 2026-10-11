@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#151720">
+  <script>try{if(localStorage.getItem("artplatform-theme")==="light")document.documentElement.dataset.theme="light"}catch{}</script>
+  <title>ArtPlatform · 创作画布</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-mark">A<span>✦</span></div><div><strong>ARTPLATFORM</strong><small>ROBLOX CREATIVE STUDIO</small></div></div>
+    <div class="side-section"><p class="eyebrow">工作空间 / WORKSPACE</p><button class="project active" id="homeButton"><span class="project-icon">◈</span><span>我的创作画布</span><span class="project-count" id="itemCount">0</span></button></div>
+    <div class="side-section prompts"><p class="eyebrow">灵感起点 / START HERE</p>
+      <button class="prompt-chip" data-prompt="魔法森林入口的古老石门，发光的蓝色符文，风格化 Roblox 游戏美术，主体居中，清晰轮廓，干净背景">✦ 魔法森林石门</button>
+      <button class="prompt-chip" data-prompt="奇幻游戏中的发光水晶路灯，正面视角，完整物体，风格化 Roblox 游戏美术，干净背景">✦ 发光水晶路灯</button>
+      <button class="prompt-chip" data-prompt="卡通风格的传送门特效概念图，紫色与金色能量旋涡，清晰明亮，游戏 VFX 参考图">✦ 传送门特效</button>
+    </div>
+    <div class="sidebar-bottom"><div class="api-status" id="apiStatus"><span class="status-dot"></span><span>正在检查服务…</span></div><p>图片会保存在本机画布。<br>拖动画布空白处平移，滚轮缩放。</p></div>
+  </aside>
+  <main class="main">
+    <header class="topbar"><div class="top-title"><span class="breadcrumb">工作空间</span><span class="slash">/</span><strong>我的创作画布</strong><span class="top-badge">本地版本</span></div><div class="top-actions"><span class="model-pill" id="activeModel">✦ Nano Banana 2.1</span><div class="theme-switch" role="group" aria-label="主题模式"><button type="button" id="darkMode" aria-pressed="true">☾ 深色</button><button type="button" id="lightMode" aria-pressed="false">☀ 浅色</button></div><button class="icon-button" id="fitButton" title="适应画布">⌗</button><button class="zoom-button" id="zoomOut" title="缩小">−</button><span class="zoom-value" id="zoomValue">100%</span><button class="zoom-button" id="zoomIn" title="放大">+</button></div></header>
+    <div class="canvas-shell" id="viewport">
+      <div class="canvas-grid" id="grid"></div>
+      <div class="world" id="world"><svg class="connections" id="connections" aria-hidden="true"></svg></div>
+      <div class="canvas-intro" id="canvasIntro"><div class="intro-icon">✦</div><span class="intro-kicker">YOUR CREATIVE SPACE</span><h1>一个想法，<br>从这里开始。</h1><p>在下方描述你想要的画面，生成结果会直接出现在无限画布上。你可以自由移动、比较和保存每张图片。</p><span class="intro-arrow">↓</span></div>
+      <div class="canvas-hint">按住空白处拖动 · 滚轮缩放</div>
+      <div class="composer">
+        <div class="composer-heading"><span class="sparkle">✦</span><span id="composerTitle">创建新图片</span><span class="composer-note" id="composerNote">从文字到画面</span><button type="button" class="upload-image-button" id="uploadImageButton">＋ 上传图片</button></div>
+        <input id="uploadImageInput" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp" aria-label="上传参考图片">
+        <div class="source-bar hidden" id="sourceBar"><img id="sourceThumb" alt="编辑参考图"><span><strong>以选中图片为参考</strong><small id="sourcePrompt"></small></span><button type="button" id="clearSource" aria-label="取消参考图">×</button></div>
+        <form id="generateForm"><label class="sr-only" for="prompt">图片描述</label><textarea id="prompt" rows="2" maxlength="2000" placeholder="描述你脑海中的画面… 例如：魔法森林中的古老石门，蓝色符文微微发光"></textarea>
+          <div class="composer-footer"><div class="controls"><label><span>模型</span><select id="modelSelect" aria-label="生图模型"><option value="nano-banana-2.1">Nano Banana 2.1</option><option value="nano-banana-2">Nano Banana 2</option><option value="nano-banana-pro">Nano Banana Pro</option></select></label><label><span>比例</span><select id="ratio"><option>1:1</option><option>3:2</option><option>2:3</option><option>4:3</option><option>3:4</option><option>16:9</option><option>9:16</option></select></label><label><span>质量</span><select id="resolution"><option value="1k">1K · 草稿</option><option value="2k">2K · 精细</option><option value="4k">4K · 高清</option></select></label><span class="price" id="price">$0.04 / 张</span></div><button class="generate" type="submit" id="generateButton"><span>✦</span> <span id="submitLabel">生成图片</span> <span class="button-arrow">↗</span></button></div>
+        </form>
+      </div>
+    </div>
+  </main>
+  <aside class="inspector" id="inspector"><div class="inspector-head"><span class="eyebrow">画布详情 / DETAILS</span></div><div class="inspector-empty" id="inspectorEmpty"><div class="empty-art">◇</div><h3>选择画布中的图片</h3><p>点击一张图片，查看生成信息与操作。</p></div><div class="inspector-content hidden" id="inspectorContent"><div class="preview" id="inspectorPreview"></div><p class="eyebrow">图片描述</p><p class="detail-prompt" id="detailPrompt"></p><div class="detail-row"><span>状态</span><strong id="detailStatus"></strong></div><div class="detail-row"><span>比例 / 质量</span><strong id="detailSize"></strong></div><div class="detail-row"><span>模型</span><strong id="detailModel">Nano Banana 2.1</strong></div><div class="detail-row hidden" id="sourceDetailRow"><span>参考图片</span><strong id="detailSource"></strong></div><button class="edit-button" id="editButton">✦ 以此图编辑</button><button class="model-button" id="modelButton">◈ 基于此图生成 3D</button><a class="download-link" id="downloadLink" href="#" download>↓ 下载图片</a><button class="delete-button" id="deleteButton">从画布移除</button></div></aside>
+</div>
+<div class="model-modal hidden" id="modelModal" role="dialog" aria-modal="true" aria-label="3D 模型预览"><div class="model-backdrop" id="modelBackdrop"></div><div class="model-panel"><div class="model-panel-head"><div><span class="eyebrow">MESHY 7.1 · MODEL PREVIEW</span><h2>3D 模型预览</h2></div><button id="closeModel" class="model-close" aria-label="关闭">×</button></div><div class="model-stage"><model-viewer id="modelViewer" camera-controls auto-rotate shadow-intensity="1" exposure="1" interaction-prompt="none" alt="生成的 3D 模型"></model-viewer><div class="model-loading" id="modelLoading">正在生成 3D 模型…</div></div><div class="model-panel-foot"><span id="modelStatus">等待生成</span><a class="model-download hidden" id="modelDownload" href="#" download>↓ 下载 GLB</a></div></div></div><div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script type="module" src="https://cdn.jsdelivr.net/npm/@google/model-viewer@4.3.1/dist/model-viewer.min.js"></script>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

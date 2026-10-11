@@ -16,3 +16,6 @@ generated/
 exports/
 *.rbxl
 *.rbxlx
+
+# Local generated images and task metadata
+data/

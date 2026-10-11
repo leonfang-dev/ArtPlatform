@@ -1,14 +1,40 @@
-# Roblox 一站式创作平台
+# ArtPlatform · Roblox 创作画布
 
-本仓库保存 Roblox 创作平台的调研与实施计划，当前尚无产品代码。
+一个可在本地运行的第一步原型：在无限画布中输入描述，通过 WaveSpeed 中可选的生图模型生成图片，并在画布上移动、比较和保存结果。
 
-- [产品与技术计划](docs/plan.md)
-- [官方资料调研](docs/research.md)
+## 启动
 
-## 产品方向
+需要 Node.js 20 或更新版本。项目不需要安装 npm 依赖。
 
-采用 Lovart 式图片画布做风格与三视图，用 Meshy 将单个模块的多视图转成 3D 粗模，再由 Codex 通过 Roblox Studio MCP 按独立场景蓝图搭建。特效编辑器采用“意图 + 分层时间轴”，输出可复用的 Roblox 原生对象。首个验证任务是一座带传送门特效的“魔法森林入口”。
+1. 将 `.env.example` 复制为 `.env`。
+2. 在 `.env` 中设置 `WAVESPEED_API_KEY`。API key 只由本地服务端读取，不会发送到浏览器。
+3. 在仓库目录运行 `npm start`。
+4. 打开 [http://127.0.0.1:4173](http://127.0.0.1:4173)。
 
-## 版本管理
+想先体验交互，可在 `.env` 中设置 `WAVESPEED_MOCK=1`，此时生成示意图片，不消耗 API 额度。接口测试运行 `npm test`。
 
-Git 管理文档、代码、配方、场景蓝图及小型授权测试素材。大型生成文件、密钥和本机缓存不入库。功能在独立分支开发，合并前进行 Studio 验收。
+## 当前能力
+
+- 无限画布：拖动空白处平移，滚轮缩放；图片卡片可拖动，支持缩放到内容。
+- 顶栏可切换深色和浅色主题；首次打开默认深色，并记住用户选择。
+- 从输入框提交文字描述，可选 Nano Banana 2.1（默认）、Nano Banana 2 或 Nano Banana Pro，以及比例与 1K/2K/4K 质量。提交后显示任务状态，完成后图片进入画布。
+- 在输入框或页面上按 Ctrl+V，可粘贴飞书等应用复制出的图片文件，也支持剪贴板 HTML 中的内嵌图片；或者点击“上传图片”。常见剪贴板图片格式会转成 PNG，先保存在本机画布并自动成为编辑参考图。若飞书仅提供受权限保护的远程链接，页面会提示使用“复制图片”或下载后上传。
+- 选中已生成图片，点击“以此图编辑”，用文字描述修改；新图片作为独立卡片出现在原图旁边，画布用连线表示参考关系，拖动卡片时连线同步更新。
+- 选中已完成图片可调用 Meshy 7.1 生成 3D 模型；任务完成后 GLB 下载到本机，可在网页弹窗中旋转、缩放和下载。
+- 图片和任务信息保存在本机 `data/`；画布位置保存在浏览器本地存储。刷新后可恢复画布，未完成任务继续查询。
+- 服务端提交 WaveSpeed 异步任务并轮询结果，下载完成的图片到本机。编辑时先将本地参考图上传到 WaveSpeed 临时存储，再调用当前选择模型的 Edit 接口。API key 不进入前端代码。
+- 页面按所选模型和分辨率显示参考价格。Nano Banana 2.1 的 1K/2K/4K 标价分别为 $0.04/$0.06/$0.135，单张参考图编辑另加约 $0.002；其他模型见 [Nano Banana 2](https://wavespeed.ai/docs/docs-api/google/google-nano-banana-2-text-to-image) 与 [Nano Banana Pro](https://wavespeed.ai/docs/docs-api/google/google-nano-banana-pro-text-to-image)。实际计费以服务商页面为准。
+
+## 当前范围
+
+此版本完成“文字 → 画布图片 → 基于单张图片的文字编辑”，也支持直接粘贴或上传外部图片作为参考。笔刷遮罩、多张参考图、三视图联合生成 3D 与 Roblox Studio MCP 搭建尚未实现；下一阶段以已生成图片为输入逐步扩展。[实施计划](docs/plan.md) · [调研记录](docs/research.md)
+
+`data/`、`.env` 与生成资产默认不入 Git。仓库当前记录代码、设计文档和测试。
+
+参考图编辑接口：[WaveSpeed Nano Banana 2.1 Edit](https://wavespeed.ai/docs/docs-api/google/google-nano-banana-2.1-edit)。
+
+## 本地服务更新
+
+如果上传时出现“未找到资源”，通常是浏览器加载了新页面，但本机仍运行旧版 Node 服务。关闭旧的运行终端，重新执行 npm start 并刷新页面。新页面首次打开时会从本机任务记录恢复已有图片。
+
+3D 生成通过 [WaveSpeed 的 Meshy V7.1 Image to 3D 接口](https://wavespeed.ai/docs/docs-api/meshy/meshy-v7.1-image-to-3d)，继续使用 WAVESPEED_API_KEY。默认生成带纹理、标准几何和约 3 万面目标的 GLB；本机图片先上传至 WaveSpeed 临时存储，再提交给 Meshy 模型。WaveSpeed 文档标价约 $1.44/次，实际以提交时费用为准。网页预览使用固定版本的 [Google model-viewer](https://github.com/google/model-viewer)，首次打开 3D 预览需要浏览器可访问其 CDN；若查看器加载失败，仍可下载本机保存的 GLB。

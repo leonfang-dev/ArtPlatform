@@ -88,6 +88,8 @@ html[data-theme="dark"] .upload-image-button:hover{background:#493e45}
 @media(max-width:700px){.composer-note{display:none}}
 
 #modelSelect{max-width:142px}
+.composer-footer .controls{flex-wrap:wrap}
+.composer-footer{flex-wrap:wrap}
 @media(max-width:700px){
   .composer-footer{flex-direction:column;align-items:stretch}
   .controls{width:100%;justify-content:space-between}

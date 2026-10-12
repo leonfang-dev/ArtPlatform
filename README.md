@@ -18,6 +18,7 @@
 - 无限画布：拖动空白处平移，滚轮缩放；图片卡片可拖动，支持缩放到内容。
 - 顶栏可切换深色和浅色主题；首次打开默认深色，并记住用户选择。
 - 从输入框提交文字描述，可选 Nano Banana 2.1（默认）、Nano Banana 2 或 Nano Banana Pro，以及比例与 1K/2K/4K 质量。提交后显示任务状态，完成后图片进入画布。
+- 模型下拉框还提供 WaveSpeed 的 GPT Image 2.5 Flare、GPT Image 2.5 Sunburst、GPT Image 2 与 GPT Image 1.5，沿用 `WAVESPEED_API_KEY`，均支持生图和单张参考图编辑。GPT 2/2.5 支持 1K/2K/4K，质量可独立选择；GPT 2.5 提供 Low/Medium/High/XHigh/Max，GPT 2 与 1.5 提供 Low/Medium/High。GPT 1.5 使用 1024×1024、1536×1024、1024×1536 三种固定尺寸（1:1、3:2、2:3），编辑明确使用高输入保真度。前端按所选模型、比例、分辨率、质量和是否编辑显示参考价格，实际以 WaveSpeed 计费为准。
 - 在输入框或页面上按 Ctrl+V，可粘贴飞书等应用复制出的图片文件，也支持剪贴板 HTML 中的内嵌图片；或者点击“上传图片”。常见剪贴板图片格式会转成 PNG，先保存在本机画布并自动成为编辑参考图。若飞书仅提供受权限保护的远程链接，页面会提示使用“复制图片”或下载后上传。
 - 选中已生成图片，点击“以此图编辑”，用文字描述修改；新图片作为独立卡片出现在原图旁边，画布用连线表示参考关系，拖动卡片时连线同步更新。
 - 选中已完成图片可调用 Meshy 7.1 生成 3D 模型；任务完成后 GLB 下载到本机，可在网页弹窗中旋转、缩放和下载。
@@ -30,6 +31,10 @@
 此版本完成“文字 → 画布图片 → 基于单张图片的文字编辑”，也支持直接粘贴或上传外部图片作为参考。笔刷遮罩、多张参考图、三视图联合生成 3D 与 Roblox Studio MCP 搭建尚未实现；下一阶段以已生成图片为输入逐步扩展。[实施计划](docs/plan.md) · [调研记录](docs/research.md)
 
 `data/`、`.env` 与生成资产默认不入 Git。仓库当前记录代码、设计文档和测试。
+
+本地文件：`data/images/` 保存生成及导入的图片，`data/tasks.json` 保存图片任务和参考关系，`data/models/` 保存 GLB，`data/model-tasks.json` 保存 3D 任务。“从画布移除”只移除浏览器中的卡片，不删除本地文件；备份资产请复制整个 `data/` 目录。浏览器本地存储另存画布布局，清除浏览器存储不会删除磁盘图片。
+
+GPT 接口参考：[GPT Image 2.5 Flare 生图](https://wavespeed.ai/docs/docs-api/openai/openai-gpt-image-2.5-flare-text-to-image)、[编辑](https://wavespeed.ai/docs/docs-api/openai/openai-gpt-image-2.5-flare-edit)、[GPT Image 2](https://wavespeed.ai/docs/docs-api/openai/openai-gpt-image-2-text-to-image)、[GPT Image 1.5](https://wavespeed.ai/docs/docs-api/openai/openai-gpt-image-1.5-text-to-image)。
 
 参考图编辑接口：[WaveSpeed Nano Banana 2.1 Edit](https://wavespeed.ai/docs/docs-api/google/google-nano-banana-2.1-edit)。
 

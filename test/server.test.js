@@ -149,7 +149,7 @@ test('model selection routes only approved WaveSpeed models', async t => {
   const base = await fixture(t, { mock: false, apiKey: 'test-key', fetchImpl: fakeFetch });
   const config = await (await fetch(base + '/api/config')).json();
   assert.equal(config.defaultModelId, 'nano-banana-2.1');
-  assert.equal(config.models.length, 3);
+  assert.equal(config.models.length, 7);
   const response = await fetch(base + '/api/generations', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt: '森林石门', modelId: 'nano-banana-pro', aspectRatio: '1:1', resolution: '2k' }) });
   assert.equal(response.status, 201);
   assert.match(calls[0].url, /google\/nano-banana-pro\/text-to-image$/);
@@ -243,4 +243,77 @@ test('stalled legacy 3D tasks are marked for regeneration', async t => {
   const result = await (await fetch('http://127.0.0.1:' + app.address().port + '/api/models')).json();
   assert.equal(result.items[0].status, 'failed');
   assert.match(result.items[0].error, /重新生成/);
+});
+
+test('WaveSpeed GPT models submit generation and edit parameters and save images locally', async t => {
+  const cases = [
+    { id: 'gpt-image-2.5-flare', quality: 'max', ratio: '16:9', resolution: '4k' },
+    { id: 'gpt-image-2.5-sunburst', quality: 'xhigh', ratio: '3:4', resolution: '2k' },
+    { id: 'gpt-image-2', quality: 'high', ratio: '9:16', resolution: '2k' },
+    { id: 'gpt-image-1.5', quality: 'low', ratio: '3:2', resolution: '1k', size: '1536*1024' }
+  ];
+  for (const c of cases) await t.test(c.id, async t => {
+    const calls = [];
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lXcAAAAASUVORK5CYII=', 'base64');
+    const fakeFetch = async (url, options = {}) => {
+      const u = String(url);
+      calls.push({ url: u, options });
+      if (u.endsWith('/text-to-image')) return Response.json({ data: { id: 'gpt-source', status: 'pending' } });
+      if (u.endsWith('/media/uploads')) return Response.json({ data: { download_url: 'https://media.example/source.png', upload: { method: 'PUT', url: 'https://storage.example/signed', headers: { 'Content-Type': 'image/png' } } } });
+      if (u.includes('storage.example')) return new Response('', { status: 200 });
+      if (u.endsWith('/edit')) return Response.json({ data: { id: 'gpt-edited', status: 'pending' } });
+      if (u.endsWith('/result')) return Response.json({ data: { status: 'completed', outputs: ['https://cdn.example/gpt.png'] } });
+      if (u.endsWith('/gpt.png')) return new Response(png, { headers: { 'content-type': 'image/png' } });
+      throw new Error('unexpected URL: ' + u);
+    };
+    const base = await fixture(t, { mock: false, apiKey: 'wavespeed-test-key', fetchImpl: fakeFetch });
+    const params = { prompt: '石门', modelId: c.id, aspectRatio: c.ratio, resolution: c.resolution, quality: c.quality };
+    const response = await fetch(base + '/api/generations', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(params) });
+    assert.equal(response.status, 201);
+    const created = (await response.json()).task;
+    assert.equal(created.modelId, c.id);
+    assert.equal(created.quality, c.quality);
+    assert.equal(calls[0].url, 'https://api.wavespeed.ai/api/v3/openai/' + c.id + '/text-to-image');
+    assert.equal(calls[0].options.headers.Authorization, 'Bearer wavespeed-test-key');
+    const expected = { prompt: '石门', ...(c.size ? { size: c.size, background: 'opaque' } : { aspect_ratio: c.ratio, resolution: c.resolution }), quality: c.quality, enable_sync_mode: false, enable_base64_output: false, output_format: 'png' };
+    assert.deepEqual(JSON.parse(calls[0].options.body), expected);
+    const completed = (await (await fetch(base + '/api/generations/' + created.id)).json()).task;
+    assert.equal(completed.status, 'completed');
+    assert.equal(completed.imageUrl, '/api/images/gpt-source.png');
+    assert.deepEqual(Buffer.from(await (await fetch(base + completed.imageUrl)).arrayBuffer()), png);
+    const editResponse = await fetch(base + '/api/generations', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...params, sourceTaskId: created.id }) });
+    assert.equal(editResponse.status, 201);
+    const edited = (await editResponse.json()).task;
+    assert.equal(edited.sourceTaskId, created.id);
+    const edit = calls.find(call => call.url.endsWith('/edit'));
+    assert.equal(edit.url, 'https://api.wavespeed.ai/api/v3/openai/' + c.id + '/edit');
+    assert.deepEqual(JSON.parse(edit.options.body), { ...expected, images: ['https://media.example/source.png'], ...(c.size ? { input_fidelity: 'high' } : {}) });
+    const result = (await (await fetch(base + '/api/generations/' + edited.id)).json()).task;
+    assert.equal(result.status, 'completed');
+    assert.notEqual(result.imageUrl, completed.imageUrl);
+    assert.deepEqual(Buffer.from(await (await fetch(base + completed.imageUrl)).arrayBuffer()), png);
+    assert.deepEqual(Buffer.from(await (await fetch(base + result.imageUrl)).arrayBuffer()), png);
+  });
+});
+
+test('GPT model controls reject incompatible inputs before billing and default to medium quality', async t => {
+  let calls = 0;
+  const base = await fixture(t, { mock: false, apiKey: 'wavespeed-test-key', fetchImpl: async () => {
+    calls++;
+    return Response.json({ data: { id: 'default-quality', status: 'pending' } });
+  } });
+  for (const params of [
+    { modelId: 'gpt-image-1.5', aspectRatio: '16:9', resolution: '1k' },
+    { modelId: 'gpt-image-1.5', aspectRatio: '1:1', resolution: '4k' },
+    { modelId: 'gpt-image-2', quality: 'xhigh' },
+    { modelId: 'gpt-image-2.5-flare', quality: 'invalid' },
+    { modelId: 'constructor' }
+  ]) {
+    const response = await fetch(base + '/api/generations', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt: '石门', ...params }) });
+    assert.equal(response.status, 400);
+  }
+  assert.equal(calls, 0);
+  const response = await fetch(base + '/api/generations', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prompt: '石门', modelId: 'gpt-image-2' }) });
+  assert.equal(response.status, 201);
+  assert.equal((await response.json()).task.quality, 'medium');
 });

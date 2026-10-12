@@ -39,9 +39,37 @@ function selectedModel() {
   return modelCatalog.find(model => model.id === $('modelSelect').value) || modelCatalog[0];
 }
 function modelLabel(id) {
-  return modelCatalog.find(model => model.id === id)?.label || 'Nano Banana 2.1';
+  return modelCatalog.find(model => model.id === id)?.label || id || 'Nano Banana 2.1';
+}
+function fillOptions(select, choices, preferred, fallback) {
+  select.replaceChildren(...choices.map(choice => new Option(choice.label, choice.value)));
+  select.value = choices.some(choice => choice.value === preferred) ? preferred : fallback || choices[0].value;
+}
+function updateModelOptions(preferred) {
+  const groups = new Map();
+  for (const model of modelCatalog) {
+    const groupLabel = model.id.startsWith('gpt-image-') ? 'GPT · WaveSpeed' : 'Nano Banana · WaveSpeed';
+    if (!groups.has(groupLabel)) {
+      const group = document.createElement('optgroup');
+      group.label = groupLabel;
+      groups.set(groupLabel, group);
+    }
+    groups.get(groupLabel).append(new Option(model.label, model.id));
+  }
+  $('modelSelect').replaceChildren(...groups.values());
+  $('modelSelect').value = modelCatalog.some(model => model.id === preferred) ? preferred : modelCatalog[0].id;
+  updateModel();
 }
 function updateModel() {
+  const model = selectedModel();
+  const ratio = $('ratio').value;
+  const resolution = $('resolution').value;
+  fillOptions($('ratio'), (model.aspectRatios || ['1:1', '3:2', '2:3', '4:3', '3:4', '16:9', '9:16']).map(value => ({ value, label: value })), ratio);
+  fillOptions($('resolution'), (model.resolutions || ['1k', '2k', '4k']).map(value => ({ value, label: model.sizeMap ? '标准尺寸' : value.toUpperCase() })), resolution);
+  $('resolution').disabled = Boolean(model.sizeMap);
+  const qualities = model.qualities || [];
+  $('qualityControl').classList.toggle('hidden', !qualities.length);
+  if (qualities.length) fillOptions($('qualitySelect'), qualities.map(value => ({ value, label: { low: 'Low · 草稿', medium: 'Medium · 标准', high: 'High · 精细', xhigh: 'XHigh · 超精细', max: 'Max · 极致' }[value] })), $('qualitySelect').value, 'medium');
   $('activeModel').textContent = '✦ ' + selectedModel().label;
   try { localStorage.setItem(modelStorageKey, selectedModel().id); } catch {}
   updatePrice();
@@ -50,9 +78,14 @@ function updateModel() {
 function editSource() { return state.items.find(x => x.localId === editSourceId); }
 function updatePrice() {
   const model = selectedModel();
-  const base = model.prices[$('resolution').value];
-  const amount = (base + (editSource() ? model.referenceFee : 0)).toFixed(3).replace(/0$/, '');
+  const reference = editSource();
+  const tier = $('qualitySelect').value || 'medium';
+  const priceKey = model.sizeMap ? ($('ratio').value === '1:1' ? 'square' : 'portrait') : $('resolution').value;
+  const base = model.tierPrices ? model.tierPrices[tier]?.[priceKey] : model.prices[$('resolution').value];
+  const total = reference && model.tierEditPrices ? model.tierEditPrices[tier]?.[priceKey] : base + (reference ? model.referenceFee : 0);
+  const amount = total.toFixed(3).replace(/0$/, '');
   $('price').textContent = '约 ' + String.fromCharCode(36) + amount + ' / 张';
+  $('price').title = model.sizeMap ? (model.sizeMap[$('ratio').value].replace('*', '×') + ' · 参考价格，实际以 WaveSpeed 计费为准') : '参考价格，实际以 WaveSpeed 计费为准';
 }
 function setEditSource(item) {
   editSourceId = item?.localId || null;
@@ -127,6 +160,10 @@ function statusLabel(item) {
   if (item.status === 'completed') return '已完成';
   if (['failed', 'cancelled', 'timeout', 'deleted'].includes(item.status)) return '生成失败';
   return '生成中';
+}
+function qualityLabel(item) {
+  if (item.mode === 'import') return '原图';
+  return (item.outputSize || item.resolution.toUpperCase()) + (item.quality ? ' · ' + item.quality.toUpperCase() : '');
 }
 
 function imageHeight(ratio) {
@@ -261,7 +298,7 @@ function renderInspector() {
   } else preview.textContent = '✦';
   $('detailPrompt').textContent = item.prompt;
   $('detailStatus').textContent = item.error || statusLabel(item);
-  $('detailSize').textContent = item.aspectRatio + ' / ' + (item.mode === 'import' ? '原图' : item.resolution.toUpperCase());
+  $('detailSize').textContent = item.aspectRatio + ' / ' + qualityLabel(item);
   $('detailModel').textContent = item.mode === 'import' ? '本地导入' : modelLabel(item.modelId);
   $('editButton').classList.toggle('hidden', item.status !== 'completed' || !item.imageUrl);
   $('modelButton').classList.toggle('hidden', item.status !== 'completed' || !item.imageUrl);
@@ -316,7 +353,7 @@ function render() {
     desc.textContent = item.prompt;
     const size = document.createElement('div');
     size.className = 'card-size';
-    size.textContent = item.aspectRatio + ' · ' + (item.mode === 'import' ? '本地导入' : item.resolution.toUpperCase() + ' · ' + modelLabel(item.modelId));
+    size.textContent = item.aspectRatio + ' · ' + (item.mode === 'import' ? '本地导入' : qualityLabel(item) + ' · ' + modelLabel(item.modelId));
     footer.append(line, desc, size);
     if (item.status === 'completed' && item.imageUrl) {
       const edit = document.createElement('button');
@@ -430,10 +467,12 @@ async function poll(item) {
 
 async function generate(event) {
   event.preventDefault();
+  if ($('generateButton').disabled) return;
   const prompt = promptInput.value.trim();
   if (!prompt) return showToast('先写下你想生成的画面');
   const aspectRatio = $('ratio').value;
   const resolution = $('resolution').value;
+  const quality = selectedModel().qualities?.length ? $('qualitySelect').value : null;
   const source = editSource();
   if (editSourceId && (!source || source.status !== 'completed' || !source.id)) return showToast('参考图尚未生成完成');
   const item = addItem(prompt, aspectRatio, resolution, source);
@@ -443,7 +482,7 @@ async function generate(event) {
     const result = await api('/api/generations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt, aspectRatio, resolution, modelId: selectedModel().id, sourceTaskId: source?.id || null })
+      body: JSON.stringify({ prompt, aspectRatio, resolution, ...(quality ? { quality } : {}), modelId: selectedModel().id, sourceTaskId: source?.id || null })
     });
     Object.assign(item, result.task);
     render();
@@ -603,25 +642,30 @@ $('deleteButton').addEventListener('click', () => {
 });
 for (const chip of document.querySelectorAll('.prompt-chip')) chip.addEventListener('click', () => { promptInput.value = chip.dataset.prompt; promptInput.focus(); });
 $('resolution').addEventListener('change', updatePrice);
+$('ratio').addEventListener('change', updatePrice);
+$('qualitySelect').addEventListener('change', updatePrice);
 $('modelSelect').addEventListener('change', updateModel);
 promptInput.addEventListener('keydown', event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) $('generateForm').requestSubmit(); });
 window.addEventListener('keydown', event => { if ((event.key === 'Delete' || event.key === 'Backspace') && state.selected && !['TEXTAREA', 'INPUT'].includes(document.activeElement.tagName)) $('deleteButton').click(); });
-try { const savedModel = localStorage.getItem(modelStorageKey); if (modelCatalog.some(model => model.id === savedModel)) $('modelSelect').value = savedModel; } catch {}
-updateModel();
 restore();
 setTransform();
 render();
 api('/api/config').then(config => {
   const el = $('apiStatus');
-  if (!Array.isArray(config.models) || config.apiVersion < 5 || !config.features?.models3d) {
+  if (!Array.isArray(config.models) || config.apiVersion < 6 || !config.features?.gptImages) {
     el.querySelector('span:last-child').textContent = '本地服务为旧版本，请重启';
     el.classList.remove('ready');
+    $('generateButton').disabled = true;
     showToast('当前端口仍在运行旧版服务；请关闭旧终端并重新运行 npm start');
     return;
   }
   modelCatalog = config.models;
   model3dConfigured = config.model3dConfigured;
-  updateModel();
+  let preferredModel = config.defaultModelId;
+  try { const saved = localStorage.getItem(modelStorageKey); if (modelCatalog.some(model => model.id === saved)) preferredModel = saved; } catch {}
+  updateModelOptions(preferredModel);
+  $('generateButton').disabled = false;
+  render();
   el.querySelector('span:last-child').textContent = config.mock ? '演示模式 · 不消耗额度' : config.configured ? (config.model3dConfigured ? 'WaveSpeed 已配置 · Meshy 可用' : 'WaveSpeed 已配置 · 3D 不可用') : '等待配置 WaveSpeed API';
   el.classList.toggle('ready', config.configured);
 }).catch(() => $('apiStatus').querySelector('span:last-child').textContent = '本地服务连接失败');

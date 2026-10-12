@@ -2,39 +2,14 @@ import http from 'node:http';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { imageModels, defaultModelId, modelConfig, validModelOptions, modelInput } from './image-models.js';
 
 const root = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const publicDir = path.join(root, 'public');
 const defaultDataDir = path.join(root, 'data');
 const apiBase = 'https://api.wavespeed.ai/api/v3/';
-const imageModels = {
-  'nano-banana-2.1': {
-    label: 'Nano Banana 2.1',
-    path: 'google/nano-banana-2.1',
-    prices: { '1k': 0.04, '2k': 0.06, '4k': 0.135 },
-    referenceFee: 0.002,
-    searchOptions: true
-  },
-  'nano-banana-2': {
-    label: 'Nano Banana 2',
-    path: 'google/nano-banana-2',
-    prices: { '1k': 0.07, '2k': 0.105, '4k': 0.14 },
-    referenceFee: 0,
-    searchOptions: true
-  },
-  'nano-banana-pro': {
-    label: 'Nano Banana Pro',
-    path: 'google/nano-banana-pro',
-    prices: { '1k': 0.14, '2k': 0.14, '4k': 0.24 },
-    referenceFee: 0,
-    searchOptions: false
-  }
-};
-const defaultModelId = 'nano-banana-2.1';
 
 const resultBase = 'https://api.wavespeed.ai/api/v3/predictions/';
-const ratios = new Set(['1:1', '3:2', '2:3', '4:3', '3:4', '16:9', '9:16']);
-const resolutions = new Set(['1k', '2k', '4k']);
 const terminal = new Set(['failed', 'cancelled', 'timeout', 'deleted']);
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml' };
 
@@ -257,7 +232,7 @@ export async function createApp(options = {}) {
       const url = new URL(req.url, 'http://localhost');
       const pathname = url.pathname;
       if (req.method === 'GET' && pathname === '/api/config') {
-        return respond(res, 200, { configured: Boolean(key) || mock, mock, apiVersion: 5, features: { models3d: true }, model3dProvider: 'wavespeed-meshy-v7.1', model3dConfigured: Boolean(key) || mock, defaultModelId, models: Object.entries(imageModels).map(([id, value]) => ({ id, label: value.label, prices: value.prices, referenceFee: value.referenceFee })) });
+        return respond(res, 200, { configured: Boolean(key) || mock, mock, apiVersion: 6, features: { models3d: true, gptImages: true }, model3dProvider: 'wavespeed-meshy-v7.1', model3dConfigured: Boolean(key) || mock, defaultModelId, models: modelConfig() });
       }
       if (req.method === 'GET' && pathname === '/api/generations') {
         return respond(res, 200, { items: Object.values(tasks).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 100) });
@@ -286,12 +261,13 @@ export async function createApp(options = {}) {
         const ratio = String(body.aspectRatio || '1:1');
         const resolution = String(body.resolution || '1k');
         const modelId = String(body.modelId || defaultModelId);
-        const model = imageModels[modelId];
+        const model = Object.hasOwn(imageModels, modelId) ? imageModels[modelId] : null;
+        const quality = model?.qualities ? String(body.quality || 'medium') : null;
         const sourceTaskId = body.sourceTaskId ? String(body.sourceTaskId) : null;
         const source = sourceTaskId ? tasks[sourceTaskId] : null;
         if (!prompt || prompt.length > 2000) return respond(res, 400, { error: '请输入 1–2000 字的描述' });
-        if (!ratios.has(ratio) || !resolutions.has(resolution)) return respond(res, 400, { error: '不支持的尺寸或分辨率' });
         if (!model) return respond(res, 400, { error: '不支持的生图模型' });
+        if (!validModelOptions(model, ratio, resolution, quality)) return respond(res, 400, { error: '所选模型不支持此比例、分辨率或质量' });
         if (sourceTaskId && (!source || source.status !== 'completed' || !source.imageUrl)) return respond(res, 400, { error: '请选择一张已完成的参考图片' });
         if (!key && !mock) return respond(res, 503, { error: '请先在 .env 中配置 WAVESPEED_API_KEY，然后重启服务' });
         let id;
@@ -309,7 +285,7 @@ export async function createApp(options = {}) {
           const upstream = await fetchImpl(endpoint, {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt, ...(inputUrl ? { images: [inputUrl] } : {}), aspect_ratio: ratio, resolution, ...(model.searchOptions ? { enable_web_search: false, enable_image_search: false } : {}), output_format: 'png' }),
+            body: JSON.stringify(modelInput(model, { prompt, inputUrl, ratio, resolution, quality })),
             signal: AbortSignal.timeout(30000)
           });
           const payload = await upstream.json().catch(() => ({}));
@@ -317,7 +293,7 @@ export async function createApp(options = {}) {
           id = payload.data.id;
           status = payload.data.status || 'submitted';
         }
-        const task = { id, prompt, aspectRatio: ratio, resolution, modelId, mode: source ? 'edit' : 'create', sourceTaskId, status, imageUrl, createdAt: new Date().toISOString(), error: null };
+        const task = { id, prompt, aspectRatio: ratio, resolution, modelId, ...(quality ? { quality } : {}), ...(model.sizeMap ? { outputSize: model.sizeMap[ratio].replace('*', '×') } : {}), mode: source ? 'edit' : 'create', sourceTaskId, status, imageUrl, createdAt: new Date().toISOString(), error: null };
         tasks[id] = task;
         await persist();
         return respond(res, 201, { task });

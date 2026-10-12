@@ -32,7 +32,13 @@
         <input id="uploadImageInput" class="sr-only" type="file" accept="image/png,image/jpeg,image/webp" aria-label="上传参考图片">
         <div class="source-bar hidden" id="sourceBar"><img id="sourceThumb" alt="编辑参考图"><span><strong>以选中图片为参考</strong><small id="sourcePrompt"></small></span><button type="button" id="clearSource" aria-label="取消参考图">×</button></div>
         <form id="generateForm"><label class="sr-only" for="prompt">图片描述</label><textarea id="prompt" rows="2" maxlength="2000" placeholder="描述你脑海中的画面… 例如：魔法森林中的古老石门，蓝色符文微微发光"></textarea>
-          <div class="composer-footer"><div class="controls"><label><span>模型</span><select id="modelSelect" aria-label="生图模型"><option value="nano-banana-2.1">Nano Banana 2.1</option><option value="nano-banana-2">Nano Banana 2</option><option value="nano-banana-pro">Nano Banana Pro</option></select></label><label><span>比例</span><select id="ratio"><option>1:1</option><option>3:2</option><option>2:3</option><option>4:3</option><option>3:4</option><option>16:9</option><option>9:16</option></select></label><label><span>质量</span><select id="resolution"><option value="1k">1K · 草稿</option><option value="2k">2K · 精细</option><option value="4k">4K · 高清</option></select></label><span class="price" id="price">$0.04 / 张</span></div><button class="generate" type="submit" id="generateButton"><span>✦</span> <span id="submitLabel">生成图片</span> <span class="button-arrow">↗</span></button></div>
+          <div class="composer-footer"><div class="controls">
+            <label><span>模型</span><select id="modelSelect" aria-label="生图模型"><option value="nano-banana-2.1">Nano Banana 2.1</option></select></label>
+            <label><span>比例</span><select id="ratio"><option>1:1</option><option>3:2</option><option>2:3</option><option>4:3</option><option>3:4</option><option>16:9</option><option>9:16</option></select></label>
+            <label><span>分辨率</span><select id="resolution"><option value="1k">1K</option><option value="2k">2K</option><option value="4k">4K</option></select></label>
+            <label id="qualityControl" class="hidden"><span>质量</span><select id="qualitySelect" aria-label="GPT 图片质量"><option value="medium">Medium · 标准</option></select></label>
+            <span class="price" id="price">正在检查服务…</span>
+          </div><button class="generate" type="submit" id="generateButton" disabled><span>✦</span> <span id="submitLabel">生成图片</span> <span class="button-arrow">↗</span></button></div>
         </form>
       </div>
     </div>
